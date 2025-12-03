@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Lab: Electrolysis Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <style>
+        /* =========================================
+           1. 폰트 및 기본 설정 (Base & Typography)
+           ========================================= */
+        @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css");
+
+        :root {
+            --primary-color: #4f46e5;
+            --primary-hover: #4338ca;
+            --bg-color: #f8fafc;
+            --text-main: #334155;
+            --text-sub: #64748b;
+            --border-color: #e2e8f0;
+            --panel-bg: rgba(255, 255, 255, 0.95);
+            
+            --h-color: #3b82f6; 
+            --o-color: #ef4444; 
+            --e-color: #f59e0b; 
+            --water-color: #e0f2fe; 
+            --tank-border: #94a3b8; 
+            --ion-na: #a855f7; 
+            --ion-so4: #f97316; 
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            touch-action: pan-y;
+            -webkit-tap-highlight-color: transparent;
+            /* Mobile: Allow scrolling, Desktop: Fixed */
+            overflow-x: hidden;
+            overflow-y: auto;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Desktop view fix */
+        @media (min-width: 1024px) {
+            body { overflow: hidden; }
+        }
+
+        /* =========================================
+           2. UI 컴포넌트
+           ========================================= */
+
+        .ui-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            border-radius: 1.25rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            padding: 1.25rem;
+            transition: all 0.3s ease;
+        }
+
+        .canvas-container {
+            background: #ffffff;
+            border-radius: 1.25rem;
+            border: 1px solid #cbd5e1;
+            box-shadow: inset 0 0 30px rgba(0,0,0,0.02);
+            position: relative;
+            overflow: hidden;
+            touch-action: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+        }
+
+        /* Mobile Canvas Height */
+        @media (max-width: 1023px) {
+            .canvas-container {
+                min-height: 400px; /* Ensure space for apparatus on mobile */
+                height: 50vh;
+            }
+        }
+        /* Desktop Canvas Height */
+        @media (min-width: 1024px) {
+            .canvas-container {
+                height: 100%;
+                flex: 1;
+            }
+        }
+
+        .btn-press {
+            transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+            user-select: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            border-radius: 0.75rem;
+        }
+        .btn-press:active { transform: scale(0.96); }
+
+        .selection-card {
+            cursor: pointer;
+            position: relative;
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+        .selection-card input[type="radio"] { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; }
+        .selection-card .card-content {
+            padding: 1rem;
+            border-radius: 0.75rem;
+            border: 1px solid var(--border-color);
+            background: white;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .selection-card input:checked + .card-content {
+            background: #f1f5f9;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 1px var(--primary-color);
+        }
+        .selection-card .check-icon {
+            color: var(--primary-color);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .selection-card input:checked + .card-content .check-icon { opacity: 1; }
+
+        .label-xs {
+            font-size: 0.7rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-sub);
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+
+        .hidden-screen { display: none !important; }
+        .fade-in { animation: fadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .animate-pulse-ring { animation: pulse-ring 2s infinite; }
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(79, 70, 229, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
+        }
+
+        .bg-blob {
+            position: absolute; border-radius: 50%; filter: blur(60px); opacity: 0.5;
+            animation: blob-float 8s infinite; mix-blend-mode: multiply; z-index: -1;
+        }
+        @keyframes blob-float {
+            0% { transform: translate(0px, 0px) scale(1); }
+            33% { transform: translate(30px, -50px) scale(1.1); }
+            66% { transform: translate(-20px, 20px) scale(0.9); }
+            100% { transform: translate(0px, 0px) scale(1); }
+        }
+        .delay-2000 { animation-delay: 2s; }
+        .delay-4000 { animation-delay: 4s; }
+
+        /* --- Simulation Specific Styles --- */
+        #sim-scale-wrap { transform-origin: center center; transition: transform 0.2s; }
+        .apparatus { position: relative; width: 600px; height: 500px; margin: 0 auto; user-select: none; }
+        
+        .tank { position: absolute; bottom: 60px; left: 100px; width: 350px; height: 200px; border: 4px solid var(--tank-border); border-top: none; border-radius: 0 0 30px 30px; background: rgba(255,255,255,0.4); z-index: 5; }
+        .liquid { position: absolute; bottom: 64px; left: 104px; width: 342px; height: 180px; background: var(--water-color); border-radius: 0 0 25px 25px; opacity: 0.9; z-index: 4; transition: background 0.3s; overflow: hidden; }
+        
+        /* Adjusted height */
+        .straw { position: absolute; bottom: 80px; width: 50px; height: 220px; background: rgba(255,255,255,0.3); border: 2px solid #cbd5e1; border-radius: 6px 6px 0 0; z-index: 6; overflow: hidden; box-shadow: inset 1px 0 5px rgba(255,255,255,0.8); }
+        .straw-l { left: 170px; } .straw-r { left: 330px; }
+        
+        .gas-space { position: absolute; top: 0; left: 0; width: 100%; height: 0%; background: #fff; border-bottom: 2px solid #bae6fd; transition: height 0.1s linear; z-index: 8; }
+        .pin { position: absolute; bottom: 60px; width: 6px; height: 50px; background: #64748b; z-index: 7; border-radius: 3px; }
+        .pin-l { left: 192px; } .pin-r { left: 352px; }
+        .wire { position: absolute; background: #334155; z-index: 2; }
+        .wire-red { background: #ef4444; }
+        .battery-case { position: absolute; bottom: 40px; right: 20px; width: 80px; height: 110px; background: #334155; border-radius: 12px; z-index: 10; display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: 20px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .battery-node { position: absolute; top: -10px; width: 20px; height: 10px; background: #94a3b8; border-radius: 4px; }
+        .node-pos { right: 15px; } .node-neg { left: 15px; }
+        
+        /* Microscopic View */
+        .micro-scope-container { position: absolute; top: 0; width: 100%; display: flex; justify-content: center; gap: 60px; pointer-events: none; z-index: 40; opacity: 0; transition: opacity 0.5s; }
+        .micro-lens { width: 120px; height: 120px; background: white; border: 4px solid #e2e8f0; border-radius: 50%; box-shadow: 0 8px 24px rgba(0,0,0,0.08); position: relative; overflow: hidden; }
+        .electrode-wall { position: absolute; top: 0; bottom: 0; width: 8px; background: #94a3b8; z-index: 1; }
+        .wall-left { left: 0; } .wall-right { right: 0; }
+        .micro-e { position: absolute; width: 10px; height: 10px; background: var(--e-color); border-radius: 50%; z-index: 20; display:flex; justify-content:center; align-items:center; font-size:7px; font-weight:bold; color:white; }
+        .micro-e::after { content:'e-'; }
+        .mol-water { position: absolute; width: 24px; height: 24px; display: flex; justify-content: center; align-items: center; }
+        .atom-o { width: 14px; height: 14px; background: var(--o-color); border-radius: 50%; z-index: 2; }
+        .atom-h { width: 8px; height: 8px; background: var(--h-color); border-radius: 50%; position: absolute; }
+        .h-1 { top: 1.5px; left: 0; } .h-2 { top: 1.5px; right: 0; }
+
+        @keyframes e-flow-cathode { 0% { left: 8px; opacity: 0; } 20% { opacity: 1; } 100% { left: 50px; opacity: 1; } }
+        @keyframes water-in-cathode { 0% { left: 90px; opacity: 0; } 100% { left: 40px; opacity: 1; } }
+        @keyframes gas-out-cathode { 0% { left: 40px; transform: scale(0.8); opacity: 1; } 100% { left: 60px; top: -20px; transform: scale(1.2); opacity: 0; } }
+        @keyframes water-in-anode { 0% { right: 90px; opacity: 0; } 100% { right: 30px; opacity: 1; } }
+        @keyframes e-flow-anode { 0% { right: 30px; opacity: 1; } 100% { right: 8px; opacity: 0; } }
+        @keyframes gas-out-anode { 0% { right: 30px; transform: scale(0.8); opacity: 1; } 100% { right: 60px; top: -20px; transform: scale(1.2); opacity: 0; } }
+
+        .spoon-container { position: absolute; top: -100px; left: 220px; width: 150px; height: 60px; z-index: 60; pointer-events: none; transition: top 0.5s; }
+        .spoon { position: absolute; right: 0; top: 0; width: 120px; height: 14px; background: #cbd5e1; border-radius: 10px; transform-origin: right center; }
+        .spoon-head { position: absolute; left: 0; top: -4px; width: 36px; height: 24px; background: #cbd5e1; border-radius: 50% 50% 50% 50% / 40% 40% 60% 60%; display: flex; justify-content: center; overflow: hidden; }
+        .powder-pile { width: 20px; height: 14px; background: #fff; border-radius: 50% 50% 0 0; margin-top: 8px; }
+        .powder-fall { position: absolute; top: 200px; left: 230px; width: 6px; height: 0; background: linear-gradient(to bottom, #fff, rgba(255,255,255,0)); z-index: 15; opacity: 0; pointer-events: none; }
+        @keyframes spoon-pour { 0% { transform: rotate(0deg); } 40% { transform: rotate(-30deg); } 70% { transform: rotate(-30deg); } 100% { transform: rotate(0deg); } }
+        @keyframes powder-drop { 0% { height: 0; opacity: 1; top: 150px;} 50% { height: 180px; opacity: 0.8; } 100% { height: 180px; opacity: 0; top: 350px; } }
+        .ion { position: absolute; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.1); opacity: 0; transform: scale(0); z-index: 10; font-size: 10px; color: white;}
+        .ion-na { width: 18px; height: 18px; background: var(--ion-na); }
+        .ion-so4 { width: 24px; height: 24px; background: var(--ion-so4); }
+        @keyframes ion-spawn { 0% { opacity: 0; transform: scale(0) translateY(-20px); } 50% { opacity: 1; transform: scale(1.1) translateY(0); } 100% { opacity: 1; transform: scale(1); } }
+        @keyframes ion-float { 0% { transform: translate(0, 0); } 100% { transform: translate(2px, -2px); } }
+        .match { position: absolute; width: 80px; height: 6px; background: #b45309; z-index: 90; display: none; border-radius: 3px; transform-origin: right center; transform: rotate(-10deg); }
+        .flame { position: absolute; left: -8px; top: -12px; width: 16px; height: 24px; background: radial-gradient(orange, yellow); border-radius: 50% 50% 20% 20%; filter: blur(1px); animation: flicker 0.1s infinite; }
+        .ember { position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; background: red; border-radius: 50%; box-shadow: 0 0 8px red; }
+        .explosion { position: absolute; left: -40px; top: -40px; width: 80px; height: 80px; background: radial-gradient(circle, #fff, #fbbf24, transparent); border-radius: 50%; opacity: 0; transform: scale(0); z-index: 99; pointer-events: none; }
+        .pop-anim { animation: pop 0.4s ease-out forwards; }
+        @keyframes pop { 0% { opacity: 1; transform: scale(0.2); } 50% { opacity: 1; transform: scale(1.5); } 100% { opacity: 0; transform: scale(2.0); } }
+        .flare-up { animation: flare 0.6s forwards; }
+        @keyframes flare { 0% { transform: scale(1); filter: brightness(1); } 50% { transform: scale(2.5); filter: brightness(2); background: radial-gradient(#fff, #ffeb3b); } 100% { transform: scale(1.5); filter: brightness(1.2); } }
+        @keyframes flicker { from{transform:scale(1) rotate(-10deg);} to{transform:scale(1.2) rotate(-10deg);} }
+        .gas-particle { position: absolute; border-radius: 50%; opacity: 0.6; animation: gas-float 3s infinite ease-in-out alternate; }
+        .gas-p-h2 { width: 5px; height: 5px; background: var(--h-color); }
+        .gas-p-o2 { width: 7px; height: 7px; background: var(--o-color); }
+        @keyframes gas-float { 0% { transform: translate(0, 0); } 100% { transform: translate(2px, -2px); } }
+
+        .lab-header { border-bottom: 1px solid var(--border-color); background: white; padding: 0 24px; height: 64px; display: flex; justify-content: space-between; align-items: center; z-index: 50; }
+        .back-btn { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--text-sub); transition: all 0.2s; }
+        .back-btn:hover { background: #f1f5f9; color: var(--text-main); }
+
+        .btn-primary { background: #334155; color: white; }
+        .btn-primary:hover { background: #1e293b; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-secondary { background: white; color: #64748b; border: 2px solid #e2e8f0; }
+        .btn-secondary:hover { background: #f8fafc; border-color: #cbd5e1; color: #475569; }
+        .btn-blue-panel { background: #eff6ff; color: #2563eb; border: 1px solid #dbeafe; }
+        .btn-blue-panel:hover { background: #dbeafe; border-color: #bfdbfe; }
+    </style>
+</head>
+<body>
+
+    <!-- Main Menu -->
+    <div id="main-menu" class="min-h-screen w-full flex flex-col items-center justify-center p-6 fade-in relative overflow-hidden bg-white">
+        <div class="bg-blob" style="top: 10%; left: 20%; width: 400px; height: 400px; background: #e0e7ff;"></div>
+        <div class="bg-blob delay-2000" style="bottom: 10%; right: 20%; width: 350px; height: 350px; background: #f3e8ff;"></div>
+        <div class="bg-blob delay-4000" style="top: 40%; left: 50%; width: 300px; height: 300px; background: #dbeafe; transform: translate(-50%, -50%);"></div>
+
+        <div class="text-center max-w-3xl z-10">
+            <span class="label-xs text-indigo-600 mb-2">Virtual Science Lab</span>
+            <h1 class="text-6xl font-black text-slate-800 tracking-tight mb-4 leading-tight">Lab:Simulation</h1>
+            <h2 class="text-5xl font-bold text-slate-600 mb-8 tracking-tight">물의 전기 분해</h2>
+            <p class="text-slate-500 text-lg mb-12 font-medium leading-relaxed">
+                전기 에너지로 물을 분해하고,<br>생성된 기체를 불꽃 반응으로 확인해보세요.
+            </p>
+            <button onclick="startSimulation()" class="btn-press animate-pulse-ring px-10 py-4 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 shadow-lg text-lg">
+                <span class="mr-3">실험 시작하기</span>
+                <i class="fa-solid fa-arrow-right"></i>
+            </button>
+        </div>
+        
+        <footer class="absolute bottom-8 w-full flex items-center justify-center gap-2 text-slate-400 text-xs font-medium">
+            <span>© 2025 사이음(sci_eum). 과학의 사이, 사람을 잇다.</span>
+            <a href="https://knuechem13.notion.site/ebd/2ba137a305b880fbac23d7b204098e51" target="_blank" class="hover:opacity-80 transition-opacity" title="오류 문의">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/e/e9/Notion-logo.svg" alt="Notion" class="w-4 h-4 opacity-50 hover:opacity-100 transition-opacity grayscale hover:grayscale-0">
+            </a>
+        </footer>
+    </div>
+
+    <!-- Lab Container -->
+    <div id="lab-container" class="hidden-screen h-screen flex flex-col fade-in bg-slate-50">
+        
+        <!-- Header -->
+        <header class="lab-header shrink-0">
+            <div class="flex items-center gap-4">
+                <button onclick="goToHome()" class="back-btn btn-press">
+                    <i class="fa-solid fa-arrow-left text-lg"></i>
+                </button>
+                <div class="flex flex-col justify-center">
+                    <span class="label-xs text-indigo-500 mb-0">Virtual Science Lab</span>
+                    <h1 class="text-xl font-extrabold text-slate-800 leading-none">물의 전기분해 시뮬레이션</h1>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200">
+                <span class="w-2 h-2 rounded-full bg-slate-300" id="status-dot"></span>
+                <span id="status-text" class="text-xs font-bold text-slate-500">대기 중</span>
+            </div>
+        </header>
+
+        <!-- Content Area: Responsive Layout (Col on mobile, Row on desktop) -->
+        <div class="flex flex-col lg:flex-row flex-1 overflow-hidden p-4 lg:p-6 gap-4 lg:gap-6">
+            
+            <!-- Left: Simulation Canvas -->
+            <div class="canvas-container" id="canvas-container">
+                
+                <!-- Equations Overlay -->
+                <div class="absolute top-6 left-6 z-30 hidden lg:block" id="eqPanel">
+                    <div class="ui-panel p-4 shadow-sm text-sm border-0 bg-white/90">
+                        <div class="font-bold text-slate-700 mb-2 flex items-center gap-2">
+                            <i class="fa-solid fa-flask text-slate-400"></i> 전극 반응식
+                        </div>
+                        <div class="mb-1 text-blue-600"><span class="font-bold">(-) 환원:</span> 2H₂O + 2e⁻ → H₂ + 2OH⁻</div>
+                        <div class="text-red-500"><span class="font-bold">(+) 산화:</span> 2H₂O → O₂ + 4H⁺ + 4e⁻</div>
+                    </div>
+                </div>
+
+                <!-- Simulation Apparatus -->
+                <div id="sim-scale-wrap">
+                    <div class="apparatus">
+                        <!-- Microscopic View -->
+                        <div class="micro-scope-container" id="microScope">
+                            <div class="micro-lens border-blue-200">
+                                <div class="absolute top-2 left-0 w-full text-center text-[10px] font-bold text-blue-500 bg-white/80 py-1">(-)극: 환원</div>
+                                <div class="electrode-wall wall-left"></div>
+                                <div class="w-full h-full relative" id="reactL"></div>
+                                <div class="absolute bottom-2 w-full text-center text-[8px] text-slate-400">전자 얻음</div>
+                            </div>
+                            <div class="micro-lens border-red-200">
+                                <div class="absolute top-2 left-0 w-full text-center text-[10px] font-bold text-red-500 bg-white/80 py-1">(+)극: 산화</div>
+                                <div class="electrode-wall wall-right"></div>
+                                <div class="w-full h-full relative" id="reactR"></div>
+                                <div class="absolute bottom-2 w-full text-center text-[8px] text-slate-400">전자 잃음</div>
+                            </div>
+                        </div>
+
+                        <!-- Labels -->
+                        <div class="absolute top-[40px] left-[170px] bg-white px-3 py-1 rounded-full text-xs font-bold text-slate-500 border border-slate-200 shadow-sm z-20">(-)극</div>
+                        <div class="absolute top-[40px] left-[330px] bg-white px-3 py-1 rounded-full text-xs font-bold text-slate-500 border border-slate-200 shadow-sm z-20">(+)극</div>
+
+                        <!-- Tubes & Wires -->
+                        <div class="straw straw-l"><div class="gas-space" id="gasL"></div><div id="bubblesL" class="absolute bottom-0 w-full h-[100px]"></div></div>
+                        <div class="straw straw-r"><div class="gas-space" id="gasR"></div><div id="bubblesR" class="absolute bottom-0 w-full h-[100px]"></div></div>
+                        <div class="pin pin-l"></div> <div class="pin pin-r"></div>
+                        <div class="wire w-[2px] h-[30px] left-[194px] bottom-[50px]"></div>
+                        <div class="wire w-[280px] h-[2px] left-[194px] bottom-[50px]"></div>
+                        <div class="wire w-[2px] h-[60px] left-[474px] bottom-[50px]"></div>
+                        <div class="wire wire-red w-[2px] h-[20px] left-[354px] bottom-[60px]"></div>
+                        <div class="wire wire-red w-[150px] h-[2px] left-[354px] bottom-[60px]"></div>
+                        <div class="wire wire-red w-[2px] h-[50px] left-[504px] bottom-[60px]"></div>
+                        <div class="battery-case"><div class="battery-node node-pos"></div><div class="battery-node node-neg"></div><span>9V</span></div>
+                        <div class="tank"></div>
+                        <div class="liquid" id="liquidLayer"></div>
+                        <div class="spoon-container" id="spoonCont"><div class="spoon"><div class="spoon-head"><div class="powder-pile" id="powder"></div></div></div></div>
+                        <div class="powder-fall" id="powderFall"></div>
+                        <div class="match" id="matchStick"></div>
+                        <div class="explosion" id="popEffect"></div>
+                    </div>
+                </div>
+
+                <!-- Modals -->
+                <div class="absolute inset-0 bg-black/20 z-50 hidden flex items-center justify-center backdrop-blur-[2px] fade-in" id="modalOverlay">
+                    <div class="ui-panel bg-white w-[90%] max-w-[400px] text-center border-0 shadow-2xl p-8">
+                        <div id="modalContentCheck">
+                            <div class="w-12 h-12 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center mx-auto mb-4 text-xl"><i class="fa-solid fa-check"></i></div>
+                            <h2 class="text-xl font-black text-slate-800 mb-2">실험 완료!</h2>
+                            <p class="text-sm text-slate-500 mb-8 font-medium">모인 기체에 불씨를 가져가 확인하세요.</p>
+                            <div class="space-y-3">
+                                <button class="btn-press w-full p-4 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl" id="btnTestL" onclick="runTest('L')">
+                                    <span class="flex-1 text-left">(-)극 확인 (성냥불)</span><i class="fa-solid fa-arrow-right opacity-60"></i>
+                                </button>
+                                <button class="btn-press w-full p-4 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl" id="btnTestR" onclick="runTest('R')">
+                                    <span class="flex-1 text-left">(+)극 확인 (불씨)</span><i class="fa-solid fa-arrow-right opacity-60"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="modalContentQuiz" class="hidden text-left">
+                            <div class="flex items-center gap-2 mb-4 text-slate-800 font-bold border-b border-slate-100 pb-3"><i class="fa-solid fa-pen-nib text-slate-400"></i> 결론 도출</div>
+                            <div class="bg-slate-50 p-5 rounded-xl text-sm leading-relaxed text-slate-600 mb-6 border border-slate-200 break-keep">
+                                물은 공유 결합 물질임에도 불구하고 전기 에너지로 분해되며, 이것은 수소 원자와 산소 원자 사이의 결합에 <span class="border-b-2 border-slate-800 font-bold text-slate-800 px-1 inline-block text-center min-w-[30px]">( ? )</span> 가 관여한다는 결정적인 증거가 된다.
+                            </div>
+                            <div class="flex gap-2">
+                                <input type="text" id="quizInput" class="flex-1 border border-slate-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 transition-all bg-white" placeholder="정답 입력" onkeyup="if(event.key==='Enter') checkAnswer()">
+                                <button class="btn-press px-6 py-3 bg-slate-800 text-white rounded-lg text-sm hover:bg-slate-900" onclick="checkAnswer()">제출</button>
+                            </div>
+                        </div>
+                        <div id="modalContentSuccess" class="hidden">
+                             <div class="w-16 h-16 bg-green-50 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl"><i class="fa-solid fa-thumbs-up"></i></div>
+                            <h2 class="text-xl font-black text-slate-800 mb-2">정답입니다!</h2>
+                            <p class="text-sm text-slate-500 mb-8 font-medium">화학 결합에는 <b>전자</b>가 관여한다는<br>사실을 확인했습니다.</p>
+                            <button class="btn-press w-full py-3 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-xl" onclick="closeModal()">닫기</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Controls (Scrollable on mobile) -->
+            <div class="w-full lg:w-80 flex flex-col gap-4 overflow-y-auto lg:h-full lg:overflow-y-auto scrollbar-hide pb-8 lg:pb-0">
+                <div class="ui-panel">
+                    <span class="label-xs">1. 용액 선택</span>
+                    <div class="space-y-2">
+                        <label class="selection-card" onclick="setMode('water')">
+                            <input type="radio" name="solution" id="mode-water" checked>
+                            <div class="card-content">
+                                <div class="text-slate-700 font-bold text-sm">순수한 물 (증류수)</div><i class="fa-solid fa-check check-icon"></i>
+                            </div>
+                        </label>
+                        <label class="selection-card" onclick="setMode('elec')">
+                            <input type="radio" name="solution" id="mode-elec">
+                            <div class="card-content">
+                                <div><div class="text-slate-700 font-bold text-sm">황산 나트륨 수용액</div><div class="text-[10px] text-slate-400 font-medium mt-0.5">전해질 역할 수행</div></div>
+                                <i class="fa-solid fa-check check-icon"></i>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="ui-panel">
+                    <span class="label-xs">2. 실험 제어</span>
+                    <div id="warnMsg" class="hidden mb-3 p-3 bg-red-50 border border-red-100 rounded-lg text-xs text-red-500 font-bold flex items-center gap-2">
+                        <i class="fa-solid fa-circle-exclamation"></i> 전해질을 넣어주세요!
+                    </div>
+                    
+                    <button class="btn-press btn-primary w-full p-4 rounded-xl mb-2" id="btnStart" onclick="startExp()">
+                        <i class="fa-solid fa-play mr-2"></i> 실험 시작
+                    </button>
+                    <button class="btn-press btn-blue-panel w-full p-4 rounded-xl mb-2 hidden" id="btnAdd" onclick="addElectrolyte()">
+                        <i class="fa-solid fa-plus mr-2"></i> 전해질(Na₂SO₄) 넣기
+                    </button>
+                    <button class="btn-press btn-secondary w-full p-4 rounded-xl" onclick="resetExp()">
+                        <i class="fa-solid fa-rotate-right mr-2"></i> 초기화
+                    </button>
+                </div>
+
+                <div class="ui-panel flex-1">
+                    <span class="label-xs">3. 실험 결과</span>
+                    <div class="space-y-5">
+                        <div>
+                            <div class="flex justify-between text-xs font-bold mb-1.5"><span class="text-blue-600">수소 (H₂)</span><span class="text-slate-700 font-mono" id="valL">0.0 mL</span></div>
+                            <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden"><div id="barL" class="h-full bg-blue-500 w-0 transition-all duration-300"></div></div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs font-bold mb-1.5"><span class="text-red-500">산소 (O₂)</span><span class="text-slate-700 font-mono" id="valR">0.0 mL</span></div>
+                            <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden"><div id="barR" class="h-full bg-red-500 w-0 transition-all duration-300"></div></div>
+                        </div>
+                        <div class="pt-5 border-t border-slate-100 hidden" id="resultRatioBox">
+                            <div class="bg-green-50 border border-green-100 rounded-lg p-3 text-center">
+                                <div class="text-[10px] text-green-600 font-bold mb-1 uppercase tracking-wide">최종 부피비 (H₂ : O₂)</div>
+                                <div class="text-2xl font-black text-slate-800 tracking-widest font-mono">2 : 1</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let isRunning = false;
+        let hasElectrolyte = false; 
+        let volL = 0, volR = 0;
+        let animFrame, microInterval, gasFillInterval;
+        const MAX_VOL = 40;
+
+        const ui = {
+            valL: document.getElementById('valL'), valR: document.getElementById('valR'),
+            barL: document.getElementById('barL'), barR: document.getElementById('barR'),
+            gasL: document.getElementById('gasL'), gasR: document.getElementById('gasR'),
+            bubL: document.getElementById('bubblesL'), bubR: document.getElementById('bubblesR'),
+            btnStart: document.getElementById('btnStart'), btnAdd: document.getElementById('btnAdd'),
+            warnMsg: document.getElementById('warnMsg'),
+            modalOverlay: document.getElementById('modalOverlay'), 
+            modalCheck: document.getElementById('modalContentCheck'),
+            modalQuiz: document.getElementById('modalContentQuiz'),
+            modalSuccess: document.getElementById('modalContentSuccess'),
+            match: document.getElementById('matchStick'), pop: document.getElementById('popEffect'),
+            btnTestL: document.getElementById('btnTestL'), btnTestR: document.getElementById('btnTestR'),
+            resultRatioBox: document.getElementById('resultRatioBox'),
+            microScope: document.getElementById('microScope'),
+            reactL: document.getElementById('reactL'), reactR: document.getElementById('reactR'),
+            eqPanel: document.getElementById('eqPanel'),
+            spoonCont: document.getElementById('spoonCont'), spoon: document.querySelector('.spoon'), 
+            powder: document.getElementById('powder'), powderFall: document.getElementById('powderFall'),
+            liquid: document.getElementById('liquidLayer'),
+            statusDot: document.getElementById('status-dot'), statusText: document.getElementById('status-text'),
+            quizInput: document.getElementById('quizInput'),
+            modeWater: document.getElementById('mode-water'), modeElec: document.getElementById('mode-elec')
+        };
+
+        function startSimulation() {
+            document.getElementById('main-menu').classList.add('hidden-screen');
+            document.getElementById('lab-container').classList.remove('hidden-screen');
+            resizeApparatus();
+            resetExp();
+        }
+
+        function goToHome() {
+            document.getElementById('lab-container').classList.add('hidden-screen');
+            document.getElementById('main-menu').classList.remove('hidden-screen');
+            resetExp();
+        }
+
+        function resizeApparatus() {
+            const container = document.getElementById('canvas-container');
+            const wrap = document.getElementById('sim-scale-wrap');
+            if(!container || !wrap) return;
+            const cw = container.clientWidth; const ch = container.clientHeight;
+            const scale = Math.min((cw - 40) / 600, (ch - 40) / 500);
+            wrap.style.transform = `scale(${Math.min(scale, 1.2)})`; 
+        }
+        window.addEventListener('resize', resizeApparatus);
+
+        function setMode(m) {
+            if(isRunning && hasElectrolyte) return; 
+            
+            ui.modeWater.checked = (m === 'water');
+            ui.modeElec.checked = (m === 'elec');
+            
+            if(m === 'water') hasElectrolyte = false;
+            if(m === 'elec') {
+                hasElectrolyte = false; 
+                resetExpUIOnly();
+            }
+            
+            resetExpUIOnly();
+        }
+
+        function startExp() {
+            if(isRunning) { stopExp(); return; }
+            if(volL >= MAX_VOL) return; 
+
+            if(!hasElectrolyte) {
+                alert("순수한 물에서는 전류가 흐르지 않아 전기 분해가 일어나지 않습니다.\n전해질을 넣어주세요.");
+                ui.warnMsg.classList.remove('hidden');
+                ui.btnStart.classList.add('hidden');
+                ui.btnAdd.classList.remove('hidden');
+                return;
+            }
+            
+            isRunning = true;
+            ui.warnMsg.classList.add('hidden');
+            ui.btnStart.innerHTML = '<i class="fa-solid fa-pause mr-2"></i> 실험 중지';
+            ui.btnStart.classList.replace('btn-primary', 'btn-danger');
+            updateStatus(true);
+            ui.eqPanel.classList.remove('hidden');
+            ui.microScope.style.opacity = 1; 
+            
+            startMicroAnim();
+            startGasFill();
+            loop();
+        }
+
+        function updateStatus(active) {
+            if(active) {
+                ui.statusDot.className = "w-2 h-2 rounded-full bg-green-500 animate-pulse";
+                ui.statusText.innerText = "반응 진행 중";
+                ui.statusText.className = "text-green-600 font-bold text-xs";
+            } else {
+                ui.statusDot.className = "w-2 h-2 rounded-full bg-slate-300";
+                ui.statusText.innerText = "대기 중";
+                ui.statusText.className = "text-slate-400 font-bold text-xs";
+            }
+        }
+
+        function stopExp() {
+            isRunning = false;
+            ui.btnStart.innerHTML = '<i class="fa-solid fa-play mr-2"></i> 실험 계속';
+            ui.btnStart.classList.replace('btn-danger', 'btn-primary');
+            updateStatus(false);
+            cancelAnimationFrame(animFrame);
+            stopMicroAnim();
+            stopGasFill();
+        }
+
+        function addElectrolyte() {
+            ui.btnAdd.disabled = true;
+            ui.spoonCont.style.top = '100px';
+            setTimeout(() => {
+                ui.spoon.style.animation = 'spoon-pour 1s ease-in-out forwards';
+                setTimeout(() => {
+                    ui.powderFall.style.animation = 'powder-drop 0.8s linear forwards';
+                    ui.powder.style.opacity = 0;
+                }, 300);
+            }, 600);
+
+            setTimeout(() => {
+                for(let i=0; i<10; i++) createIon('Na⁺', 'ion-na');
+                for(let i=0; i<5; i++) createIon('SO₄²⁻', 'ion-so4');
+                hasElectrolyte = true;
+                
+                ui.modeWater.checked = false;
+                ui.modeElec.checked = true;
+
+                setTimeout(() => {
+                    ui.spoonCont.style.top = '-100px';
+                    ui.btnAdd.classList.add('hidden');
+                    ui.btnStart.classList.remove('hidden');
+                    ui.btnStart.innerHTML = '<i class="fa-solid fa-play mr-2"></i> 실험 시작';
+                    ui.warnMsg.classList.add('hidden');
+                    ui.btnAdd.disabled = false;
+                    alert("황산 나트륨이 용해되었습니다."); 
+                }, 1000);
+            }, 1200);
+        }
+
+        function createIon(text, cls) {
+            const ion = document.createElement('div'); 
+            ion.className = `ion ${cls}`; ion.innerText = text;
+            let x = Math.random() * 280 + 10; let y = Math.random() * 140 + 10;
+            ion.style.left = x + 'px'; ion.style.top = y + 'px';
+            ion.style.animation = 'ion-spawn 0.5s ease-out forwards, ion-float 3s infinite ease-in-out alternate';
+            ui.liquid.appendChild(ion);
+        }
+
+        function resetExp() {
+            hasElectrolyte = false;
+            ui.modeWater.checked = true;
+            ui.modeElec.checked = false;
+            resetExpUIOnly();
+        }
+
+        function resetExpUIOnly() {
+            stopExp(); 
+            volL = 0; volR = 0;
+            ui.btnStart.innerHTML = '<i class="fa-solid fa-play mr-2"></i> 실험 시작';
+            ui.btnStart.classList.replace('btn-danger', 'btn-primary');
+            ui.btnStart.classList.remove('hidden'); 
+            ui.btnAdd.classList.add('hidden');      
+            ui.warnMsg.classList.add('hidden');
+            
+            ui.eqPanel.classList.add('hidden');
+            ui.microScope.style.opacity = 0;
+            ui.resultRatioBox.classList.add('hidden');
+            
+            ui.valL.innerText = "0.0 mL"; ui.valR.innerText = "0.0 mL";
+            ui.barL.style.width = "0%"; ui.barR.style.width = "0%";
+            ui.gasL.style.height = "0%"; ui.gasR.style.height = "0%";
+            ui.bubL.innerHTML = ''; ui.bubR.innerHTML = '';
+            ui.gasL.innerHTML = ''; ui.gasR.innerHTML = '';
+
+            ui.modalOverlay.classList.add('hidden');
+            ui.modalCheck.classList.remove('hidden');
+            ui.modalQuiz.classList.add('hidden');
+            ui.modalSuccess.classList.add('hidden');
+            ui.btnTestL.disabled = false; ui.btnTestL.classList.remove('opacity-50');
+            ui.btnTestR.disabled = false; ui.btnTestR.classList.remove('opacity-50');
+            
+            ui.spoon.style.animation = 'none'; ui.spoonCont.style.top = '-100px';
+            ui.powder.style.opacity = 1; ui.powderFall.style.animation = 'none';
+            
+            if(!hasElectrolyte) {
+                 ui.liquid.innerHTML = '';
+            } else {
+                 if(ui.liquid.children.length === 0) {
+                     for(let i=0; i<10; i++) createIon('Na⁺', 'ion-na');
+                     for(let i=0; i<5; i++) createIon('SO₄²⁻', 'ion-so4');
+                 }
+            }
+        }
+
+        function loop() {
+            if(!isRunning) return;
+            volL += 0.05; volR += 0.025; 
+            ui.valL.innerText = volL.toFixed(1) + " mL"; ui.valR.innerText = volR.toFixed(1) + " mL";
+            const perL = Math.min((volL/MAX_VOL)*100, 100);
+            const perR = Math.min((volR/MAX_VOL)*100, 100);
+            ui.barL.style.width = perL + "%"; ui.barR.style.width = perR + "%";
+            ui.gasL.style.height = perL + "%"; ui.gasR.style.height = perR + "%";
+
+            if(volL >= MAX_VOL) {
+                stopExp();
+                ui.btnStart.innerHTML = '<i class="fa-solid fa-check mr-2"></i> 실험 완료';
+                ui.resultRatioBox.classList.remove('hidden');
+                setTimeout(() => ui.modalOverlay.classList.remove('hidden'), 500);
+            } else {
+                animFrame = requestAnimationFrame(loop);
+            }
+        }
+
+        function startGasFill() {
+            gasFillInterval = setInterval(() => {
+                if (Math.random() < 0.7) createGasParticle(ui.gasL, 'h2');
+                if (Math.random() < 0.35) createGasParticle(ui.gasR, 'o2');
+            }, 600);
+        }
+        function stopGasFill() { clearInterval(gasFillInterval); }
+        function createGasParticle(container, type) {
+            if (container.clientHeight < 10) return; 
+            const p = document.createElement('div');
+            p.className = `gas-particle gas-p-${type}`;
+            p.style.left = Math.random() * (container.clientWidth - 8) + 'px';
+            p.style.top = Math.random() * (container.clientHeight - 8) + 'px';
+            container.appendChild(p);
+            if (container.childElementCount > 60) container.removeChild(container.firstChild);
+        }
+
+        function startMicroAnim() {
+            microInterval = setInterval(() => {
+                let w = createMol('water'); w.style.left = '100px'; w.style.animation = 'water-in-cathode 2.5s linear forwards';
+                ui.reactL.appendChild(w);
+                setTimeout(() => {
+                    if(!isRunning) { w.remove(); return; }
+                    let e = document.createElement('div'); e.className = 'micro-e';
+                    e.style.left = '10px'; e.style.animation = 'e-flow-cathode 1s linear forwards';
+                    ui.reactL.appendChild(e);
+                    setTimeout(() => {
+                        if(!isRunning) return;
+                        w.remove(); e.remove();
+                        let g = createMol('h2'); g.style.left = '60px'; g.style.animation = 'gas-out-cathode 2.5s ease-out forwards';
+                        ui.reactL.appendChild(g); setTimeout(()=>g.remove(), 2500);
+                    }, 1000);
+                }, 1500);
+
+                let w2 = createMol('water'); w2.style.right = '100px'; w2.style.animation = 'water-in-anode 2.5s linear forwards';
+                ui.reactR.appendChild(w2);
+                setTimeout(() => {
+                    if(!isRunning) { w2.remove(); return; }
+                    let e2 = document.createElement('div'); e2.className = 'micro-e';
+                    e2.style.right = '50px'; e2.style.animation = 'e-flow-anode 1s linear forwards';
+                    ui.reactR.appendChild(e2);
+                    w2.remove();
+                    let g2 = createMol('o2'); g2.style.right = '50px'; g2.style.animation = 'gas-out-anode 2.5s ease-out forwards';
+                    ui.reactR.appendChild(g2); setTimeout(()=>{ g2.remove(); e2.remove(); }, 2500);
+                }, 2500);
+            }, 3000);
+        }
+        function stopMicroAnim() { clearInterval(microInterval); ui.reactL.innerHTML = ''; ui.reactR.innerHTML = ''; }
+        function createMol(type) {
+            const div = document.createElement('div');
+            if(type==='water') { div.className='mol-water'; div.innerHTML='<div class="atom-o"></div><div class="atom-h h-1"></div><div class="atom-h h-2"></div>'; } 
+            else if(type==='h2') { div.className='mol-water'; div.innerHTML='<div class="atom-h" style="position:relative; margin-right:2px;"></div><div class="atom-h" style="position:relative;"></div>'; } 
+            else { div.className='mol-water'; div.innerHTML='<div class="atom-o" style="position:relative; margin-right:2px;"></div><div class="atom-o" style="position:relative;"></div>'; }
+            return div;
+        }
+
+        function runTest(side) {
+            ui.modalOverlay.classList.add('hidden');
+            ui.match.style.display = 'block';
+            const isH2 = (side === 'L');
+            ui.match.innerHTML = isH2 ? '<div class="flame"></div>' : '<div class="ember"></div>';
+            let targetX = isH2 ? 195 : 355; 
+            let startT = Date.now();
+            ui.match.style.top = '170px'; /* Changed from 70px to align with tube top */
+            
+            let timer = setInterval(() => {
+                let p = (Date.now() - startT) / 2000;
+                let currentLeft = 600 - (p * (600 - targetX));
+                if(currentLeft < targetX) currentLeft = targetX;
+                ui.match.style.left = currentLeft + 'px';
+
+                if(currentLeft <= targetX) {
+                    clearInterval(timer);
+                    if(isH2) {
+                        ui.pop.style.left = (targetX - 40) + 'px'; ui.pop.style.top = '140px'; /* Adjusted for lower tube */
+                        ui.pop.classList.add('pop-anim');
+                        setTimeout(() => {
+                            alert("펑! 소리를 내며 탔습니다. (수소 확인)");
+                            ui.btnTestL.disabled = true; ui.btnTestL.classList.add('opacity-50');
+                            finishCheck();
+                        }, 500);
+                    } else {
+                        let flame = ui.match.querySelector('.ember');
+                        if(flame) flame.className = 'flame flare-up';
+                        setTimeout(() => {
+                            alert("불씨가 다시 타올랐습니다. (산소 확인)");
+                            ui.btnTestR.disabled = true; ui.btnTestR.classList.add('opacity-50');
+                            finishCheck();
+                        }, 800);
+                    }
+                }
+            }, 16);
+        }
+
+        function finishCheck() {
+            ui.match.style.display = 'none'; 
+            ui.pop.classList.remove('pop-anim'); 
+            ui.modalOverlay.classList.remove('hidden');
+            if(ui.btnTestL.disabled && ui.btnTestR.disabled) {
+                ui.modalCheck.classList.add('hidden');
+                ui.modalQuiz.classList.remove('hidden');
+            }
+        }
+
+        function checkAnswer() {
+            const val = ui.quizInput.value.trim();
+            if(val === "전자" || val === "electron" || val === "e-") {
+                ui.modalQuiz.classList.add('hidden');
+                ui.modalSuccess.classList.remove('hidden');
+            } else {
+                alert("힌트: 전하를 띠고 이동하는 입자입니다.");
+                ui.quizInput.value = "";
+                ui.quizInput.focus();
+            }
+        }
+
+        function closeModal() {
+            ui.modalOverlay.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
