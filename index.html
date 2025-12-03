@@ -95,7 +95,7 @@
         }
 
         .btn-press {
-            transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s, box-shadow 0.2s;
+            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s, box-shadow 0.2s;
             cursor: pointer;
             user-select: none;
             display: inline-flex;
@@ -149,13 +149,7 @@
         .fade-in { animation: fadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        .animate-pulse-ring { animation: pulse-ring 2s infinite; }
-        @keyframes pulse-ring {
-            0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(79, 70, 229, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
-        }
-
+        /* Blob Animation */
         .bg-blob {
             position: absolute; border-radius: 50%; filter: blur(60px); opacity: 0.5;
             animation: blob-float 8s infinite; mix-blend-mode: multiply; z-index: -1;
@@ -263,9 +257,9 @@
             <p class="text-slate-500 text-lg mb-12 font-medium leading-relaxed">
                 전기 에너지로 물을 분해하고,<br>생성된 기체를 불꽃 반응으로 확인해보세요.
             </p>
-            <button onclick="startSimulation()" class="btn-press animate-pulse-ring px-10 py-4 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 shadow-lg text-lg">
+            <button onclick="startSimulation()" class="btn-press px-10 py-4 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 shadow-md hover:shadow-xl hover:scale-105 transition-all duration-300 text-lg group">
                 <span class="mr-3">실험 시작하기</span>
-                <i class="fa-solid fa-arrow-right"></i>
+                <i class="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
             </button>
         </div>
         
@@ -354,6 +348,22 @@
                         <div class="powder-fall" id="powderFall"></div>
                         <div class="match" id="matchStick"></div>
                         <div class="explosion" id="popEffect"></div>
+                    </div>
+                </div>
+
+                <!-- Custom Alert Overlay -->
+                <div class="absolute inset-0 bg-black/20 z-[60] hidden flex items-center justify-center backdrop-blur-[2px] fade-in" id="alertOverlay">
+                    <div class="bg-white rounded-2xl shadow-xl w-[320px] p-6 text-center border border-slate-100 transform transition-all scale-100">
+                        <div class="mb-4">
+                            <span class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto text-xl">
+                                <i class="fa-solid fa-bell"></i>
+                            </span>
+                        </div>
+                        <p class="text-slate-800 font-bold text-lg mb-2" id="alertTitle">알림</p>
+                        <p class="text-slate-500 text-sm mb-6 leading-relaxed" id="alertMessage">메시지 내용</p>
+                        <button onclick="closeAlert()" class="btn-press w-full py-3 bg-slate-800 text-white rounded-xl hover:bg-slate-900 transition-all">
+                            확인
+                        </button>
                     </div>
                 </div>
 
@@ -483,9 +493,24 @@
             liquid: document.getElementById('liquidLayer'),
             statusDot: document.getElementById('status-dot'), statusText: document.getElementById('status-text'),
             quizInput: document.getElementById('quizInput'),
-            modeWater: document.getElementById('mode-water'), modeElec: document.getElementById('mode-elec')
+            modeWater: document.getElementById('mode-water'), modeElec: document.getElementById('mode-elec'),
+            alertOverlay: document.getElementById('alertOverlay'),
+            alertTitle: document.getElementById('alertTitle'),
+            alertMessage: document.getElementById('alertMessage')
         };
 
+        /* --- Custom Alert System --- */
+        function showCustomAlert(title, message) {
+            ui.alertTitle.innerText = title;
+            ui.alertMessage.innerHTML = message;
+            ui.alertOverlay.classList.remove('hidden');
+        }
+
+        function closeAlert() {
+            ui.alertOverlay.classList.add('hidden');
+        }
+
+        /* --- Normal Logic --- */
         function startSimulation() {
             document.getElementById('main-menu').classList.add('hidden-screen');
             document.getElementById('lab-container').classList.remove('hidden-screen');
@@ -529,7 +554,7 @@
             if(volL >= MAX_VOL) return; 
 
             if(!hasElectrolyte) {
-                alert("순수한 물에서는 전류가 흐르지 않아 전기 분해가 일어나지 않습니다.\n전해질을 넣어주세요.");
+                showCustomAlert("알림", "순수한 물에서는 전류가 흐르지 않아 <br>전기 분해가 일어나지 않습니다.<br>전해질을 넣어주세요.");
                 ui.warnMsg.classList.remove('hidden');
                 ui.btnStart.classList.add('hidden');
                 ui.btnAdd.classList.remove('hidden');
@@ -597,7 +622,7 @@
                     ui.btnStart.innerHTML = '<i class="fa-solid fa-play mr-2"></i> 실험 시작';
                     ui.warnMsg.classList.add('hidden');
                     ui.btnAdd.disabled = false;
-                    alert("황산 나트륨이 용해되었습니다."); 
+                    showCustomAlert("성공", "황산 나트륨이 용해되었습니다."); 
                 }, 1000);
             }, 1200);
         }
@@ -739,7 +764,7 @@
             ui.match.innerHTML = isH2 ? '<div class="flame"></div>' : '<div class="ember"></div>';
             let targetX = isH2 ? 195 : 355; 
             let startT = Date.now();
-            ui.match.style.top = '170px'; /* Changed from 70px to align with tube top */
+            ui.match.style.top = '170px'; 
             
             let timer = setInterval(() => {
                 let p = (Date.now() - startT) / 2000;
@@ -750,10 +775,10 @@
                 if(currentLeft <= targetX) {
                     clearInterval(timer);
                     if(isH2) {
-                        ui.pop.style.left = (targetX - 40) + 'px'; ui.pop.style.top = '140px'; /* Adjusted for lower tube */
+                        ui.pop.style.left = (targetX - 40) + 'px'; ui.pop.style.top = '140px'; 
                         ui.pop.classList.add('pop-anim');
                         setTimeout(() => {
-                            alert("펑! 소리를 내며 탔습니다. (수소 확인)");
+                            showCustomAlert("확인 결과", "💥 펑! 소리를 내며 탔습니다. (수소 확인)");
                             ui.btnTestL.disabled = true; ui.btnTestL.classList.add('opacity-50');
                             finishCheck();
                         }, 500);
@@ -761,7 +786,7 @@
                         let flame = ui.match.querySelector('.ember');
                         if(flame) flame.className = 'flame flare-up';
                         setTimeout(() => {
-                            alert("불씨가 다시 타올랐습니다. (산소 확인)");
+                            showCustomAlert("확인 결과", "🔥 불씨가 다시 타올랐습니다. (산소 확인)");
                             ui.btnTestR.disabled = true; ui.btnTestR.classList.add('opacity-50');
                             finishCheck();
                         }, 800);
@@ -773,10 +798,24 @@
         function finishCheck() {
             ui.match.style.display = 'none'; 
             ui.pop.classList.remove('pop-anim'); 
-            ui.modalOverlay.classList.remove('hidden');
+            
+            // Re-open main modal after alert closes
+            // But custom alert is async UI, so we rely on user closing it.
+            // When user closes alert, they see the simulation again. 
+            // We need to show the experiment modal again if not all done.
+            
             if(ui.btnTestL.disabled && ui.btnTestR.disabled) {
-                ui.modalCheck.classList.add('hidden');
-                ui.modalQuiz.classList.remove('hidden');
+                // Show quiz
+                setTimeout(() => {
+                    ui.modalOverlay.classList.remove('hidden');
+                    ui.modalCheck.classList.add('hidden');
+                    ui.modalQuiz.classList.remove('hidden');
+                }, 1000); // Wait for alert interaction
+            } else {
+                // Show check modal again
+                setTimeout(() => {
+                    ui.modalOverlay.classList.remove('hidden');
+                }, 1000);
             }
         }
 
@@ -786,7 +825,7 @@
                 ui.modalQuiz.classList.add('hidden');
                 ui.modalSuccess.classList.remove('hidden');
             } else {
-                alert("힌트: 전하를 띠고 이동하는 입자입니다.");
+                showCustomAlert("오답", "힌트: 전하를 띠고 이동하는 입자입니다.");
                 ui.quizInput.value = "";
                 ui.quizInput.focus();
             }
